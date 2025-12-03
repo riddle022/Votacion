@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Download, Calendar } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface VoteResult {
   option_id: string;
@@ -10,6 +12,15 @@ interface VoteResult {
   text_en: string;
   count: number;
 }
+
+type VoteRow = {
+  vote_option_id: string;
+  vote_options: {
+    text_pt: string;
+    text_es: string;
+    text_en: string;
+  };
+};
 
 export function ResultsView() {
   const { t } = useLanguage();
@@ -37,7 +48,8 @@ export function ResultsView() {
     const { data } = await query;
 
     if (data) {
-      const grouped = data.reduce((acc: Record<string, VoteResult>, vote: any) => {
+      const typedData = data as VoteRow[];
+      const grouped = typedData.reduce<Record<string, VoteResult>>((acc, vote) => {
         const optionId = vote.vote_option_id;
         if (!acc[optionId]) {
           acc[optionId] = {
@@ -62,189 +74,181 @@ export function ResultsView() {
     loadResults(dateFrom, dateTo);
   };
 
-  const exportToPDF = () => {
-    // Dynamic import to avoid build issues
-    import('jspdf').then((jsPDFModule) => {
-      import('jspdf-autotable').then(() => {
-        const { jsPDF } = jsPDFModule;
-        const doc = new jsPDF() as any;
+  const exportToPDF = async () => {
+    try {
+      const doc = new jsPDF();
 
-        // Colors
-        const primaryBlue = [37, 99, 235]; // #2563eb
-        const lightBlue = [219, 234, 254]; // #dbeafe
-        const darkGray = [31, 41, 55]; // #1f2937
-        const mediumGray = [107, 114, 128]; // #6b7280
+      // Colors
+      const primaryBlue = [37, 99, 235]; // #2563eb
+      const lightBlue = [219, 234, 254]; // #dbeafe
+      const darkGray = [31, 41, 55]; // #1f2937
+      // Header with branding
+      doc.setFillColor(...primaryBlue);
+      doc.rect(0, 0, 210, 40, 'F');
 
-        // Header with branding
-        doc.setFillColor(...primaryBlue);
-        doc.rect(0, 0, 210, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Cellshop Duty Free', 105, 20, { align: 'center' });
 
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(24);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Cellshop Duty Free', 105, 20, { align: 'center' });
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Relatório de Resultados da Votação', 105, 32, { align: 'center' });
 
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Relatório de Resultados da Votação', 105, 32, { align: 'center' });
+      // Report metadata
+      let yPos = 50;
+      doc.setTextColor(...darkGray);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
 
-        // Report metadata
-        let yPos = 50;
-        doc.setTextColor(...darkGray);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
+      const reportDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      doc.text(`Data de geração: ${reportDate}`, 20, yPos);
+      yPos += 6;
 
-        const reportDate = new Date().toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: 'long',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        doc.text(`Data de geração: ${reportDate}`, 20, yPos);
+      if (dateFrom || dateTo) {
+        const filterText = `Período filtrado: ${dateFrom ? new Date(dateFrom).toLocaleDateString('pt-BR') : 'Início'} até ${dateTo ? new Date(dateTo).toLocaleDateString('pt-BR') : 'Hoje'}`;
+        doc.text(filterText, 20, yPos);
         yPos += 6;
+      }
 
-        if (dateFrom || dateTo) {
-          const filterText = `Período filtrado: ${dateFrom ? new Date(dateFrom).toLocaleDateString('pt-BR') : 'Início'} até ${dateTo ? new Date(dateTo).toLocaleDateString('pt-BR') : 'Hoje'}`;
-          doc.text(filterText, 20, yPos);
-          yPos += 6;
-        }
+      // Summary section
+      yPos += 5;
+      doc.setFillColor(...lightBlue);
+      doc.roundedRect(20, yPos, 170, 25, 3, 3, 'F');
 
-        // Summary section
-        yPos += 5;
-        doc.setFillColor(...lightBlue);
-        doc.roundedRect(20, yPos, 170, 25, 3, 3, 'F');
+      yPos += 8;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryBlue);
+      doc.text('Resumo Geral', 25, yPos);
 
-        yPos += 8;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...primaryBlue);
-        doc.text('Resumo Geral', 25, yPos);
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...darkGray);
+      doc.text(`Total de Votos: ${totalVotes}`, 25, yPos);
+      doc.text(`Opções Disponíveis: ${results.length}`, 120, yPos);
 
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...darkGray);
-        doc.text(`Total de Votos: ${totalVotes}`, 25, yPos);
-        doc.text(`Opções Disponíveis: ${results.length}`, 120, yPos);
+      yPos += 15;
 
-        yPos += 15;
+      // Results table
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryBlue);
+      doc.text('Resultados Detalhados', 20, yPos);
+      yPos += 5;
 
-        // Results table
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...primaryBlue);
-        doc.text('Resultados Detalhados', 20, yPos);
-        yPos += 5;
+      const safeTotalVotes = totalVotes || 1;
+      const tableData = results.map((r) => [
+        r.text_pt,
+        r.text_es,
+        r.text_en,
+        r.count.toString(),
+        `${((r.count / safeTotalVotes) * 100).toFixed(1)}%`
+      ]);
 
-        const tableData = results.map(r => [
-          r.text_pt,
-          r.text_es,
-          r.text_en,
-          r.count.toString(),
-          `${((r.count / totalVotes) * 100).toFixed(1)}%`
-        ]);
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Opção (PT)', 'Opção (ES)', 'Opção (EN)', 'Votos', '%']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+          fillColor: primaryBlue,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10,
+          halign: 'center'
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: darkGray
+        },
+        alternateRowStyles: {
+          fillColor: [249, 250, 251]
+        },
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 50 },
+          3: { halign: 'center', cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 20, fontStyle: 'bold' }
+        },
+        margin: { left: 20, right: 20 }
+      });
 
-        doc.autoTable({
-          startY: yPos,
-          head: [['Opção (PT)', 'Opção (ES)', 'Opção (EN)', 'Votos', '%']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: {
-            fillColor: primaryBlue,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 10,
-            halign: 'center'
-          },
-          bodyStyles: {
-            fontSize: 9,
-            textColor: darkGray
-          },
-          alternateRowStyles: {
-            fillColor: [249, 250, 251]
-          },
-          columnStyles: {
-            0: { cellWidth: 50 },
-            1: { cellWidth: 50 },
-            2: { cellWidth: 50 },
-            3: { halign: 'center', cellWidth: 20 },
-            4: { halign: 'center', cellWidth: 20, fontStyle: 'bold' }
-          },
-          margin: { left: 20, right: 20 }
-        });
+      yPos = (doc.lastAutoTable?.finalY ?? yPos) + 15;
 
-        // Visual chart section
-        yPos = (doc as any).lastAutoTable.finalY + 15;
+      // Check if we need a new page
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
 
-        // Check if we need a new page
-        if (yPos > 250) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...primaryBlue);
+      doc.text('Gráfico de Distribuição', 20, yPos);
+      yPos += 8;
+
+      const maxCount = results.length > 0 ? Math.max(...results.map((r) => r.count)) : 1;
+      const chartWidth = 150;
+      const barHeight = 8;
+      const barSpacing = 12;
+
+      results.forEach((result) => {
+        if (yPos > 270) {
           doc.addPage();
           yPos = 20;
         }
 
-        doc.setFontSize(12);
+        const percentage = (result.count / safeTotalVotes) * 100;
+        const barWidth = (result.count / maxCount) * chartWidth;
+
+        // Option label
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...darkGray);
+        const labelText = result.text_pt.length > 40 ? `${result.text_pt.substring(0, 37)}...` : result.text_pt;
+        doc.text(labelText, 20, yPos + 6);
+
+        doc.setFillColor(...lightBlue);
+        doc.roundedRect(20, yPos + 2, chartWidth, barHeight, 1, 1, 'F');
+
+        doc.setFillColor(...primaryBlue);
+        doc.roundedRect(20, yPos + 2, barWidth, barHeight, 1, 1, 'F');
+
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...primaryBlue);
-        doc.text('Gráfico de Distribuição', 20, yPos);
-        yPos += 8;
+        doc.text(`${result.count} (${percentage.toFixed(1)}%)`, chartWidth + 25, yPos + 7);
 
-        const maxCount = Math.max(...results.map(r => r.count));
-        const chartWidth = 150;
-        const barHeight = 8;
-        const barSpacing = 12;
-
-        results.forEach((result, index) => {
-          if (yPos > 270) {
-            doc.addPage();
-            yPos = 20;
-          }
-
-          const percentage = (result.count / totalVotes) * 100;
-          const barWidth = (result.count / maxCount) * chartWidth;
-
-          // Option label
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(...darkGray);
-          const labelText = result.text_pt.length > 30 ? result.text_pt.substring(0, 30) + '...' : result.text_pt;
-          doc.text(labelText, 20, yPos);
-
-          // Bar
-          doc.setFillColor(...lightBlue);
-          doc.roundedRect(20, yPos + 2, chartWidth, barHeight, 1, 1, 'F');
-
-          doc.setFillColor(...primaryBlue);
-          doc.roundedRect(20, yPos + 2, barWidth, barHeight, 1, 1, 'F');
-
-          // Percentage label
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(...primaryBlue);
-          doc.text(`${result.count} (${percentage.toFixed(1)}%)`, chartWidth + 25, yPos + 7);
-
-          yPos += barSpacing;
-        });
-
-        // Footer
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-          doc.setPage(i);
-          doc.setFillColor(...primaryBlue);
-          doc.rect(0, 287, 210, 10, 'F');
-
-          doc.setTextColor(255, 255, 255);
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'normal');
-          doc.text('Cellshop Duty Free - Sistema de Votação', 105, 293, { align: 'center' });
-          doc.text(`Página ${i} de ${pageCount}`, 190, 293, { align: 'right' });
-        }
-
-        // Save the PDF
-        const fileName = `cellshop-resultados-${new Date().toISOString().split('T')[0]}.pdf`;
-        doc.save(fileName);
+        yPos += barSpacing;
       });
-    });
+
+      // Footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFillColor(...primaryBlue);
+        doc.rect(0, 287, 210, 10, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Cellshop Duty Free - Sistema de Votação', 105, 293, { align: 'center' });
+        doc.text(`Página ${i} de ${pageCount}`, 190, 293, { align: 'right' });
+      }
+
+      const fileName = `cellshop-resultados-${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      console.error('Error al generar el PDF:', error);
+    }
   };
 
   const maxCount = results.length > 0 ? Math.max(...results.map(r => r.count)) : 1;
