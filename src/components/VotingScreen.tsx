@@ -109,30 +109,45 @@ export function VotingScreen({ onBack, onAdminLogin }: VotingScreenProps) {
           <div className="absolute right-0 top-0 flex gap-2">
             <button
               onClick={() => setLanguage('es')}
-              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 ${language === 'es'
-                ? 'bg-white text-blue-700 shadow-lg scale-105'
-                : 'bg-white/20 text-white hover:bg-white/30'
+              className={`w-12 h-8 rounded-md overflow-hidden transition-all duration-300 ${language === 'es'
+                ? 'ring-2 ring-white scale-110 shadow-lg'
+                : 'opacity-70 hover:opacity-100 hover:scale-105'
                 }`}
+              title="Español"
             >
-              ES
+              <img
+                src="/flags/es.png"
+                alt="Español"
+                className="w-full h-full object-cover"
+              />
             </button>
             <button
               onClick={() => setLanguage('en')}
-              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 ${language === 'en'
-                ? 'bg-white text-blue-700 shadow-lg scale-105'
-                : 'bg-white/20 text-white hover:bg-white/30'
+              className={`w-12 h-8 rounded-md overflow-hidden transition-all duration-300 ${language === 'en'
+                ? 'ring-2 ring-white scale-110 shadow-lg'
+                : 'opacity-70 hover:opacity-100 hover:scale-105'
                 }`}
+              title="English"
             >
-              EN
+              <img
+                src="/flags/us.png"
+                alt="English"
+                className="w-full h-full object-cover"
+              />
             </button>
             <button
               onClick={() => setLanguage('pt')}
-              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 ${language === 'pt'
-                ? 'bg-white text-blue-700 shadow-lg scale-105'
-                : 'bg-white/20 text-white hover:bg-white/30'
+              className={`w-12 h-8 rounded-md overflow-hidden transition-all duration-300 ${language === 'pt'
+                ? 'ring-2 ring-white scale-110 shadow-lg'
+                : 'opacity-70 hover:opacity-100 hover:scale-105'
                 }`}
+              title="Português"
             >
-              PT
+              <img
+                src="/flags/br.png"
+                alt="Português"
+                className="w-full h-full object-cover"
+              />
             </button>
           </div>
         </div>
